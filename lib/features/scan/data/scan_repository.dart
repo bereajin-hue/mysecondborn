@@ -1,14 +1,11 @@
 import 'dart:typed_data';
 
-import 'package:flutter/services.dart';
 import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/config/app_config.dart';
-import '../../../core/config/env.dart';
-import '../../../core/services/gemini_service.dart';
 
 class ScanRepository {
   final _supabase = Supabase.instance.client;
@@ -19,14 +16,14 @@ class ScanRepository {
       final today = DateTime.now().toUtc().toIso8601String().substring(0, 10);
       final res = await _supabase
           .from('usage_limits')
-          .select('scan_count')
+          .select('count')
           .eq('user_id', userId)
           .eq('date', today)
           .maybeSingle();
       if (res == null) return false;
-      return (res['scan_count'] as int) >= AppConfig.geminiDailyLimit;
+      return (res['count'] as int) >= AppConfig.geminiDailyLimit;
     } catch (_) {
-      return false; // 테이블 없거나 오류 시 제한 없이 통과
+      return false;
     }
   }
 
@@ -46,6 +43,37 @@ class ScanRepository {
         : decoded;
 
     return Uint8List.fromList(img.encodeJpg(resized, quality: 80));
+  }
+
+  // 파일 크기 + 샘플링된 바이트로 간단한 해시 계산 (crypto 패키지 없이 구현)
+  String _computeHash(Uint8List bytes) {
+    var h = 5381;
+    final step = (bytes.length / 256).ceil().clamp(1, bytes.length);
+    for (var i = 0; i < bytes.length; i += step) {
+      h = ((h << 5) + h + bytes[i]) & 0xFFFFFFFF;
+    }
+    return '${bytes.length}_${h.toRadixString(16)}';
+  }
+
+  // 동일 해시를 가진 성공한 분석 결과 조회 (사용자 전체 대상)
+  Future<Map<String, dynamic>?> _checkCache(String hash) async {
+    try {
+      final res = await _supabase
+          .from('scans')
+          .select('gemini_response')
+          .eq('image_hash', hash)
+          .not('gemini_response', 'is', null)
+          .order('created_at', ascending: false)
+          .limit(1)
+          .maybeSingle();
+      if (res == null) return null;
+      final data = res['gemini_response'] as Map<String, dynamic>?;
+      // 에러 응답은 캐시 히트로 사용하지 않음
+      if (data == null || data.containsKey('error')) return null;
+      return data;
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<String> _uploadToStorage(Uint8List bytes, String userId) async {
@@ -70,7 +98,7 @@ class ScanRepository {
       final today = DateTime.now().toUtc().toIso8601String().substring(0, 10);
       final existing = await _supabase
           .from('usage_limits')
-          .select('scan_count')
+          .select('count')
           .eq('user_id', userId)
           .eq('date', today)
           .maybeSingle();
@@ -79,33 +107,56 @@ class ScanRepository {
         await _supabase.from('usage_limits').insert({
           'user_id': userId,
           'date': today,
-          'scan_count': 1,
+          'count': 1,
         });
       } else {
         await _supabase.from('usage_limits').update({
-          'scan_count': (existing['scan_count'] as int) + 1,
+          'count': (existing['count'] as int) + 1,
         }).eq('user_id', userId).eq('date', today);
       }
-    } catch (_) {
-      // 사용량 집계 실패는 분석 흐름을 막지 않음
-    }
+    } catch (_) {}
   }
 
-  /// 메인 플로우: 압축 → 업로드 → scan 레코드 생성 → Gemini 분석 → scanId 반환
+  /// 메인 플로우:
+  /// 1) 압축 + 해시 계산
+  /// 2) 캐시 히트 → 기존 결과 복사하여 scan 생성 (Gemini 호출 없음)
+  /// 3) 캐시 미스 → scan 생성 후 Edge Function을 백그라운드 실행
+  ///    ResultScreen이 실시간 구독으로 완료를 감지
   Future<String> captureAndAnalyze(XFile xfile, String userId) async {
-    // ① 압축 (규칙 6번 엄수)
     final raw = await xfile.readAsBytes();
     final compressed = _compress(raw);
+    final hash = _computeHash(compressed);
 
-    // ② Storage 업로드
+    // 캐시 확인 — 동일 이미지면 Gemini 재호출 불필요
+    final cached = await _checkCache(hash);
     final imageUrl = await _uploadToStorage(compressed, userId);
 
-    // ③ scans 레코드 생성 (gemini_response null — 아직 분석 전)
-    final Map<String, dynamic> scanRow;
-    try {
-      scanRow = await _supabase
+    if (cached != null) {
+      // 캐시 히트: 결과를 바로 저장하여 ResultScreen에서 즉시 표시
+      final row = await _supabase
           .from('scans')
-          .insert({'user_id': userId, 'raw_image_url': imageUrl})
+          .insert({
+            'user_id': userId,
+            'raw_image_url': imageUrl,
+            'image_hash': hash,
+            'gemini_response': cached,
+          })
+          .select()
+          .single();
+      await _incrementUsage(userId);
+      return row['id'] as String;
+    }
+
+    // 캐시 미스: scan 레코드를 먼저 생성하고 Edge Function에 위임
+    final Map<String, dynamic> row;
+    try {
+      row = await _supabase
+          .from('scans')
+          .insert({
+            'user_id': userId,
+            'raw_image_url': imageUrl,
+            'image_hash': hash,
+          })
           .select()
           .single();
     } catch (e, s) {
@@ -114,34 +165,33 @@ class ScanRepository {
       } catch (_) {}
       throw Exception('분석 기록 저장 중 문제가 생겼어요. 다시 시도해주세요.');
     }
-    final scanId = scanRow['id'] as String;
 
-    // ④ 사용량 증가
+    final scanId = row['id'] as String;
     await _incrementUsage(userId);
 
-    // ⑤ Gemini 분석 — 성공·실패 모두 scans 테이블에 기록
-    try {
-      final prompt = await rootBundle.loadString('prompts/product_analysis.md');
-      final gemini = GeminiService(apiKey: Env.geminiApiKey, prompt: prompt);
-      final result = await gemini.analyzeBytes(compressed, 'image/jpeg');
-      await _supabase
-          .from('scans')
-          .update({'gemini_response': result})
-          .eq('id', scanId);
-    } catch (e, s) {
-      try {
-        await Sentry.captureException(e, stackTrace: s);
-      } catch (_) {}
-      final msg = e is GeminiException
-          ? e.userMessage
-          : '잠깐 문제가 생겼어요. 다시 시도해주세요.';
-      await _supabase
-          .from('scans')
-          .update({'gemini_response': <String, dynamic>{'error': msg}})
-          .eq('id', scanId);
-    }
+    // Edge Function을 백그라운드 실행 — gemini_response 업데이트를 ResultScreen이 실시간 구독
+    _supabase.functions
+        .invoke('analyze-product', body: {'scan_id': scanId})
+        .then((_) {})
+        .catchError((_) {});
 
-    // ⑥ scanId 반환 — ResultScreen이 DB에서 직접 조회
     return scanId;
+  }
+
+  // 캐비닛에 저장
+  Future<void> saveToMyCabinet(String userId, String productId) async {
+    final existing = await _supabase
+        .from('cabinet')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('product_id', productId)
+        .maybeSingle();
+
+    if (existing != null) throw Exception('이미 내 영양제에 저장되어 있어요!');
+
+    await _supabase.from('cabinet').insert({
+      'user_id': userId,
+      'product_id': productId,
+    });
   }
 }

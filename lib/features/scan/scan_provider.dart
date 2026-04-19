@@ -4,21 +4,17 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'data/scan_repository.dart';
 
+export 'data/scan_repository.dart' show ScanRepository;
+
 final scanRepositoryProvider = Provider<ScanRepository>((ref) => ScanRepository());
 
-// scan 화면 전체 상태 — isProcessing 동안 HomeScreen에 오버레이 표시
+// 스캔 플로우 상태 — HomeScreen 로딩 오버레이와 에러 표시에 사용
 class ScanState {
   final bool isProcessing;
   final String? scanId;
   final String? error;
 
   const ScanState({this.isProcessing = false, this.scanId, this.error});
-
-  ScanState copyWith({bool? isProcessing, String? scanId, String? error}) => ScanState(
-        isProcessing: isProcessing ?? this.isProcessing,
-        scanId: scanId ?? this.scanId,
-        error: error ?? this.error,
-      );
 }
 
 class ScanNotifier extends StateNotifier<ScanState> {
@@ -44,13 +40,16 @@ final scanNotifierProvider = StateNotifierProvider<ScanNotifier, ScanState>(
   (ref) => ScanNotifier(ref.read(scanRepositoryProvider)),
 );
 
-// ResultScreen이 scanId로 Supabase에서 결과를 조회
-final scanResultProvider =
-    FutureProvider.autoDispose.family<Map<String, dynamic>?, String>((ref, scanId) async {
-  final res = await Supabase.instance.client
-      .from('scans')
-      .select('gemini_response')
-      .eq('id', scanId)
-      .single();
-  return res['gemini_response'] as Map<String, dynamic>?;
-});
+// ResultScreen 전용 — scans 테이블을 실시간 구독하여 gemini_response 업데이트 감지
+final scanStreamProvider = StreamProvider.autoDispose.family<Map<String, dynamic>?, String>(
+  (ref, scanId) {
+    return Supabase.instance.client
+        .from('scans')
+        .stream(primaryKey: ['id'])
+        .eq('id', scanId)
+        .map((rows) {
+          if (rows.isEmpty) return null;
+          return rows.first;
+        });
+  },
+);
