@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
@@ -28,27 +29,31 @@ class GeminiService {
         ),
         _prompt = prompt;
 
-  /// 영양제 이미지를 분석해 JSON Map을 반환.
-  /// 에러 시 한국어 메시지를 담은 [GeminiException] throw.
+  /// 웹·모바일 공용 — XFile.readAsBytes() 결과를 그대로 받아서 분석
+  Future<Map<String, dynamic>> analyzeBytes(Uint8List bytes, String mimeType) async {
+    if (bytes.lengthInBytes > AppConfig.maxImageBytes) {
+      throw const GeminiException('이미지가 너무 큽니다. 앱에서 압축 후 다시 시도해주세요.');
+    }
+    return _analyze(DataPart(mimeType, bytes));
+  }
+
+  /// CLI 도구 전용 — dart:io File 기반 (모바일/CLI 환경)
   Future<Map<String, dynamic>> analyzeProduct(File imageFile) async {
     final imageBytes = await imageFile.readAsBytes();
-
-    // 규칙 6번: 5MB 초과는 앱 단에서 압축 후 호출해야 함
     if (imageBytes.lengthInBytes > AppConfig.maxImageBytes) {
       throw const GeminiException('이미지가 너무 큽니다. 앱에서 압축 후 다시 시도해주세요.');
     }
+    return _analyze(DataPart(_detectMimeType(imageFile.path), imageBytes));
+  }
 
-    final mimeType = _detectMimeType(imageFile.path);
+  Future<Map<String, dynamic>> _analyze(DataPart dataPart) async {
     Object? lastError;
 
     for (int attempt = 0; attempt <= _retryDelays.length; attempt++) {
       try {
         final response = await _model
             .generateContent([
-              Content.multi([
-                TextPart(_prompt),
-                DataPart(mimeType, imageBytes),
-              ])
+              Content.multi([TextPart(_prompt), dataPart])
             ])
             .timeout(_timeout);
 
@@ -60,8 +65,6 @@ class GeminiService {
         return _parseAndValidate(text);
       } catch (e, s) {
         lastError = e;
-
-        // CLI 환경(Sentry 미초기화)에서도 무중단으로 진행하기 위해 try-catch 래핑
         try {
           await Sentry.captureException(
             e,
@@ -76,7 +79,6 @@ class GeminiService {
       }
     }
 
-    // 모든 재시도 소진 후 유저에게 노출할 메시지 포장
     final isTimeout = lastError is TimeoutException;
     throw GeminiException(
       isTimeout
@@ -87,7 +89,6 @@ class GeminiService {
   }
 
   Map<String, dynamic> _parseAndValidate(String text) {
-    // Gemini가 간혹 마크다운 코드블록을 포함하는 경우 방어 처리
     final cleaned = text
         .replaceAll(RegExp(r'```json\s*', multiLine: true), '')
         .replaceAll(RegExp(r'```\s*', multiLine: true), '')
@@ -101,10 +102,8 @@ class GeminiService {
       throw GeminiException('분석 결과를 읽을 수 없어요. 다시 시도해주세요.', cause: preview);
     }
 
-    // 에러 응답은 검증 없이 통과 (영양제 아님 케이스)
     if (result.containsKey('error')) return result;
 
-    // 필수 필드 검증
     for (final key in ['product_name', 'confidence', 'readable_summary']) {
       if (!result.containsKey(key) || result[key] == null) {
         throw GeminiException('분석 결과가 완전하지 않아요. 다시 시도해주세요.',
@@ -112,7 +111,6 @@ class GeminiService {
       }
     }
 
-    // confidence 범위 검증
     final confidence = result['confidence'];
     if (confidence is! num || confidence < 0 || confidence > 1) {
       throw const GeminiException('분석 결과가 올바르지 않아요. 다시 시도해주세요.');
@@ -130,7 +128,6 @@ class GeminiService {
   }
 }
 
-/// GeminiService 전용 예외 — 유저에게 노출할 한국어 메시지 포함
 class GeminiException implements Exception {
   final String userMessage;
   final Object? cause;

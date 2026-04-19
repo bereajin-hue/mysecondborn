@@ -36,6 +36,9 @@ dependencies:
   # 환경변수
   flutter_dotenv: ^5.1.0
 
+  # 외부 링크 (쿠팡 파트너스)
+  url_launcher: ^6.3.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
