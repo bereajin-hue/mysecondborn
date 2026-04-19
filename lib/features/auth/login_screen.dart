@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'auth_provider.dart';
 import '../../shared/theme/app_theme.dart';
 
@@ -91,6 +92,16 @@ class LoginScreen extends ConsumerWidget {
                 style: TextStyle(fontSize: 15, color: Color(0xFF888888)),
               ),
 
+              // TODO: Day 3 완료 후 삭제 — 카카오 콘솔 설정 전 네비게이션 테스트용
+              const SizedBox(height: 16),
+              TextButton(
+                onPressed: isLoading ? null : () => _onTestLogin(context, ref),
+                child: const Text(
+                  '🔧 개발자 테스트 로그인',
+                  style: TextStyle(fontSize: 14, color: Color(0xFFCCCCCC)),
+                ),
+              ),
+
               const Spacer(),
 
               // 약관 — 체크박스 없이 텍스트 한 줄로 (시니어 UX: 복잡한 UI 제거)
@@ -107,6 +118,23 @@ class LoginScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  // 테스트 계정으로 로그인 — Supabase 대시보드에서 생성한 test@mompill.com 사용
+  Future<void> _onTestLogin(BuildContext context, WidgetRef ref) async {
+    ref.read(loginLoadingProvider.notifier).state = true;
+    ref.read(loginErrorProvider.notifier).state   = null;
+    try {
+      await Supabase.instance.client.auth.signInWithPassword(
+        email: 'test@mompill.com',
+        password: 'Test1234!',
+      );
+    } catch (_) {
+      ref.read(loginErrorProvider.notifier).state =
+          'test@mompill.com 계정을 Supabase에서 먼저 만들어주세요.';
+    } finally {
+      ref.read(loginLoadingProvider.notifier).state = false;
+    }
   }
 
   Future<void> _onKakaoLogin(BuildContext context, WidgetRef ref) async {
