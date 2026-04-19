@@ -1,5 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' hide AuthException;
 import 'data/auth_repository.dart';
 
 export 'data/auth_repository.dart' show AuthRepository, AuthException;
