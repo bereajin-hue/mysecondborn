@@ -1,0 +1,49 @@
+name: mompill
+description: 엄마가 홈쇼핑에서 영양제 사기 전에 사진 찍으면 아들처럼 최저가와 성분을 알려주는 무료 앱
+publish_to: none
+version: 0.1.0+1
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # 백엔드
+  supabase_flutter: ^2.5.0
+
+  # 상태관리 (Riverpod 단일 원칙)
+  flutter_riverpod: ^2.5.1
+
+  # AI 분석
+  google_generative_ai: ^0.4.6
+
+  # 에러 추적
+  sentry_flutter: ^8.3.0
+
+  # 인증
+  kakao_flutter_sdk_user: ^1.9.0
+
+  # 이미지
+  image_picker: ^1.1.2
+  image: ^4.1.7
+  cached_network_image: ^3.3.1
+
+  # 라우팅
+  go_router: ^14.2.0
+
+  # 환경변수
+  flutter_dotenv: ^5.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+  integration_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true
+  assets:
+    - .env

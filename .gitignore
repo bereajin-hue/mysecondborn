@@ -1,0 +1,30 @@
+# 환경변수 — 절대 커밋 금지
+.env
+
+# Flutter / Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+build/
+*.iml
+*.log
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# iOS
+ios/Pods/
+ios/.symlinks/
+
+# Android
+android/.gradle/
+android/local.properties
+android/key.properties
+
+# macOS
+macos/Pods/
+macos/.symlinks/
