@@ -23,7 +23,7 @@ class GeminiService {
   // prompt를 외부에서 주입받는 이유: Flutter는 rootBundle, CLI는 File 로드 방식이 달라서
   GeminiService({required String apiKey, required String prompt})
       : _model = GenerativeModel(
-          model: 'gemini-2.0-flash',
+          model: 'gemini-2.5-flash',
           apiKey: apiKey,
         ),
         _prompt = prompt;

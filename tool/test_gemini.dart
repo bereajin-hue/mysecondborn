@@ -53,7 +53,7 @@ Future<void> main(List<String> args) async {
   // ── Gemini 호출 ────────────────────────────────────────────
   stdout.writeln('📸 분석 중... (${args[0]}, ${fileSizeMb.toStringAsFixed(2)}MB)');
 
-  final model = GenerativeModel(model: 'gemini-2.0-flash', apiKey: apiKey);
+  final model = GenerativeModel(model: 'gemini-2.5-flash', apiKey: apiKey);
   final mimeType = _detectMimeType(args[0]);
 
   // 재시도 로직: 1s → 3s → 9s (규칙 3번)
