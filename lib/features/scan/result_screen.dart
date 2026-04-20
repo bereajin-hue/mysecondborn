@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:posthog_flutter/posthog_flutter.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../features/auth/auth_provider.dart';
+import '../../core/config/env.dart';
+import '../../core/services/coupang_service.dart';
 import '../../shared/theme/app_theme.dart';
 import 'scan_provider.dart';
 
@@ -402,7 +405,7 @@ class ResultScreen extends ConsumerWidget {
                   width: double.infinity,
                   height: 56,
                   child: ElevatedButton.icon(
-                    onPressed: () => _openCoupang(context, productName),
+                    onPressed: () => _openCoupang(context, productName, userId, scan['product_id'] as String?),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFFFF4500),
                       shape: RoundedRectangleBorder(
@@ -451,7 +454,7 @@ class ResultScreen extends ConsumerWidget {
                 const SizedBox(height: 16),
                 const Center(
                   child: Text(
-                    '쿠팡 파트너스 활동의 일환으로, 수수료를 받을 수 있습니다',
+                    '쿠팡 파트너스 활동의 일환으로 커미션을 제공받을 수 있어요',
                     textAlign: TextAlign.center,
                     style: TextStyle(fontSize: 12, color: Color(0xFFBBBBBB)),
                   ),
@@ -464,10 +467,33 @@ class ResultScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _openCoupang(BuildContext context, String keyword) async {
-    final uri = Uri.parse(
-        'https://www.coupang.com/np/search?q=${Uri.encodeComponent(keyword)}');
-    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+  Future<void> _openCoupang(
+    BuildContext context,
+    String productName,
+    String userId,
+    String? productId,
+  ) async {
+    final coupang = CoupangService(Env.coupangTrackingId);
+
+    // 1) 클릭 이벤트 DB 기록 (전환율 측정용)
+    Supabase.instance.client.from('click_events').insert({
+      'user_id': userId,
+      'scan_id': scanId,
+      'product_name': productName,
+    }).then((_) {}).catchError((_) {});
+
+    // 2) PostHog 이벤트 전송
+    try {
+      await Posthog().capture(
+        eventName: 'coupang_link_clicked',
+        properties: {'product_name': productName},
+      );
+    } catch (_) {}
+
+    // 3) 딥링크 실행 (앱 없으면 웹 폴백)
+    try {
+      await coupang.openProductSearch(productName);
+    } catch (_) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('쿠팡을 열 수 없어요. 브라우저를 확인해주세요.')),

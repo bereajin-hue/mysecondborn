@@ -8,6 +8,7 @@ class Env {
   static String get sentryDsn => _require('SENTRY_DSN');
   static String get kakaoNativeKey => _require('KAKAO_NATIVE_KEY');
   static String get coupangTrackingId => _require('COUPANG_TRACKING_ID');
+  static String get postHogApiKey => dotenv.env['POSTHOG_API_KEY'] ?? '';
 
   static String _require(String key) {
     final value = dotenv.env[key];
