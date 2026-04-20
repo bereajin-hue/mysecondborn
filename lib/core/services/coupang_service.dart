@@ -1,17 +1,22 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class CoupangService {
   // HMAC 서명은 서버에서만 해야 하므로 Edge Function 경유
   Future<String> getAffiliateUrl(String productName) async {
+    debugPrint('[Coupang] invoke 시작: $productName');
     try {
       final response = await Supabase.instance.client.functions.invoke(
         'coupang-links',
         body: {'product_name': productName},
       );
+      debugPrint('[Coupang] 응답: ${response.data}');
       final url = response.data['url'] as String?;
       if (url != null && url.isNotEmpty) return url;
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[Coupang] 오류: $e');
+    }
     // Edge Function 장애 시 클라이언트 직접 검색으로 폴백
     final q = Uri.encodeComponent(productName);
     return 'https://www.coupang.com/np/search?q=$q&channel=user';
