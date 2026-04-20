@@ -56,11 +56,12 @@ class ScanRepository {
   }
 
   // 동일 해시를 가진 성공한 분석 결과 조회 (사용자 전체 대상)
+  // gemini_response와 product_id를 함께 반환 — 캐시 히트 시 product_id 전파를 위해
   Future<Map<String, dynamic>?> _checkCache(String hash) async {
     try {
       final res = await _supabase
           .from('scans')
-          .select('gemini_response')
+          .select('gemini_response, product_id')
           .eq('image_hash', hash)
           .not('gemini_response', 'is', null)
           .order('created_at', ascending: false)
@@ -70,7 +71,7 @@ class ScanRepository {
       final data = res['gemini_response'] as Map<String, dynamic>?;
       // 에러 응답은 캐시 히트로 사용하지 않음
       if (data == null || data.containsKey('error')) return null;
-      return data;
+      return res; // {gemini_response: {...}, product_id: 'uuid' or null}
     } catch (_) {
       return null;
     }
@@ -132,6 +133,41 @@ class ScanRepository {
     final imageUrl = await _uploadToStorage(compressed, userId);
 
     if (cached != null) {
+      final geminiResponse = cached['gemini_response'] as Map<String, dynamic>;
+      var productId = cached['product_id'] as String?;
+
+      // 원본 스캔에 product_id가 없으면 (products 테이블 생성 전 스캔)
+      // 지금 products 테이블에서 찾거나 새로 생성
+      if (productId == null) {
+        final name = geminiResponse['product_name'] as String?;
+        final brand = (geminiResponse['brand'] as String?) ?? '';
+        if (name != null) {
+          try {
+            final existing = await _supabase
+                .from('products')
+                .select('id')
+                .eq('name', name)
+                .eq('brand', brand)
+                .maybeSingle();
+            if (existing != null) {
+              productId = existing['id'] as String;
+            } else {
+              final inserted = await _supabase
+                  .from('products')
+                  .insert({
+                    'name': name,
+                    'brand': brand.isEmpty ? null : brand,
+                    'ingredients': geminiResponse['main_ingredients'] ?? [],
+                    'image_url': imageUrl,
+                  })
+                  .select('id')
+                  .single();
+              productId = inserted['id'] as String;
+            }
+          } catch (_) {}
+        }
+      }
+
       // 캐시 히트: 결과를 바로 저장하여 ResultScreen에서 즉시 표시
       final row = await _supabase
           .from('scans')
@@ -139,7 +175,8 @@ class ScanRepository {
             'user_id': userId,
             'raw_image_url': imageUrl,
             'image_hash': hash,
-            'gemini_response': cached,
+            'gemini_response': geminiResponse,
+            if (productId != null) 'product_id': productId,
           })
           .select()
           .single();
