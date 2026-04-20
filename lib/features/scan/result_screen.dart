@@ -5,7 +5,6 @@ import 'package:posthog_flutter/posthog_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../features/auth/auth_provider.dart';
-import '../../core/config/env.dart';
 import '../../core/services/coupang_service.dart';
 import '../../shared/theme/app_theme.dart';
 import 'scan_provider.dart';
@@ -473,7 +472,7 @@ class ResultScreen extends ConsumerWidget {
     String userId,
     String? productId,
   ) async {
-    final coupang = CoupangService(Env.coupangTrackingId);
+    final coupang = CoupangService();
 
     // 1) 클릭 이벤트 DB 기록 (전환율 측정용)
     Supabase.instance.client.from('click_events').insert({

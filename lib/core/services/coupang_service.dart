@@ -1,37 +1,34 @@
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class CoupangService {
-  final String _trackingId;
-
-  const CoupangService(this._trackingId);
-
-  // 제품명 → 쿠팡 검색 URL (트래킹 포함)
-  String buildSearchUrl(String productName) {
-    final cleaned = productName
-        .replaceAll(RegExp(r'[^\w\s가-힣ㄱ-ㅎㅏ-ㅣ]'), ' ')
-        .replaceAll(RegExp(r'\s+'), ' ')
-        .trim();
-    final encoded = Uri.encodeComponent(cleaned);
-    return 'https://www.coupang.com/np/search?q=$encoded&channel=user&lptag=$_trackingId';
+  // HMAC 서명은 서버에서만 해야 하므로 Edge Function 경유
+  Future<String> getAffiliateUrl(String productName) async {
+    try {
+      final response = await Supabase.instance.client.functions.invoke(
+        'coupang-links',
+        body: {'product_name': productName},
+      );
+      final url = response.data['url'] as String?;
+      if (url != null && url.isNotEmpty) return url;
+    } catch (_) {}
+    // Edge Function 장애 시 클라이언트 직접 검색으로 폴백
+    final q = Uri.encodeComponent(productName);
+    return 'https://www.coupang.com/np/search?q=$q&channel=user';
   }
 
-  // 딥링크 실행 → 쿠팡 앱 없으면 웹 URL로 자동 폴백
   Future<void> openProductSearch(String productName) async {
-    final webUrl = buildSearchUrl(productName);
+    final affiliateUrl = await getAffiliateUrl(productName);
 
-    // 모바일 딥링크 먼저 시도
-    final deepLink = Uri.parse(
+    // 쿠팡 앱 딥링크 먼저 시도 (모바일 전용, 웹에선 canLaunchUrl = false)
+    final appDeepLink = Uri.parse(
       'coupang://search?q=${Uri.encodeComponent(productName.replaceAll(RegExp(r'[^\w\s가-힣ㄱ-ㅎㅏ-ㅣ]'), ' ').trim())}',
     );
 
-    if (await canLaunchUrl(deepLink)) {
-      await launchUrl(deepLink);
+    if (await canLaunchUrl(appDeepLink)) {
+      await launchUrl(appDeepLink);
     } else {
-      // 앱 없거나 웹 환경 → 웹 쿠팡으로 폴백
-      await launchUrl(
-        Uri.parse(webUrl),
-        mode: LaunchMode.externalApplication,
-      );
+      await launchUrl(Uri.parse(affiliateUrl), mode: LaunchMode.externalApplication);
     }
   }
 }
