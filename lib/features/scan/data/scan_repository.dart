@@ -234,39 +234,49 @@ class ScanRepository {
 
   // 캐비닛 목록 조회 — cabinet + scans 2쿼리로 N+1 없이 조합
   Future<List<Map<String, dynamic>>> getCabinetItems(String userId) async {
-    final cabinetRows = await _supabase
+    final raw = await _supabase
         .from('cabinet')
         .select('id, product_id, created_at')
         .eq('user_id', userId)
         .order('created_at', ascending: false);
 
-    if ((cabinetRows as List).isEmpty) return [];
+    final cabinetRows = List<Map<String, dynamic>>.from(raw as List);
+    if (cabinetRows.isEmpty) return [];
 
-    final productIds = cabinetRows.map((r) => r['product_id'] as String).toList();
+    // null product_id 항목은 조회에서 제외 (이전 테스트 데이터 방어)
+    final productIds = cabinetRows
+        .map((r) => r['product_id'] as String?)
+        .whereType<String>()
+        .toSet()
+        .toList();
 
-    final scanRows = await _supabase
+    if (productIds.isEmpty) return [];
+
+    // inFilter 대신 raw filter 사용 — 라이브러리 버전 차이 방어
+    final inClause = '(${productIds.join(',')})';
+    final scanRaw = await _supabase
         .from('scans')
         .select('id, product_id, raw_image_url, gemini_response')
         .eq('user_id', userId)
-        .inFilter('product_id', productIds)
+        .filter('product_id', 'in', inClause)
         .order('created_at', ascending: false);
 
     // product_id → 가장 최신 scan (이미 내림차순이므로 첫 번째가 최신)
     final Map<String, Map<String, dynamic>> scanByProduct = {};
-    for (final scan in (scanRows as List)) {
+    for (final scan in List<Map<String, dynamic>>.from(scanRaw as List)) {
       final pid = scan['product_id'] as String?;
       if (pid != null && !scanByProduct.containsKey(pid)) {
-        scanByProduct[pid] = Map<String, dynamic>.from(scan as Map);
+        scanByProduct[pid] = scan;
       }
     }
 
     return cabinetRows.map<Map<String, dynamic>>((cabinet) {
-      final productId = cabinet['product_id'] as String;
-      final scan = scanByProduct[productId];
+      final productId = cabinet['product_id'] as String?;
+      final scan = productId != null ? scanByProduct[productId] : null;
       final gemini = scan?['gemini_response'] as Map<String, dynamic>?;
       return {
         'cabinet_id': cabinet['id'] as String,
-        'product_id': productId,
+        'product_id': productId ?? '',
         'added_at': cabinet['created_at'] as String,
         'scan_id': scan?['id'] as String?,
         'image_url': scan?['raw_image_url'] as String?,
