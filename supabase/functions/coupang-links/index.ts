@@ -21,7 +21,7 @@ async function hmacSha256Hex(message: string, secret: string): Promise<string> {
     .join('');
 }
 
-// 쿠팡 API 서명에 필요한 yyMMddHHmmss 형식 (UTC 기준)
+// 공식 가이드 기준: yyMMddTHHmmssZ (UTC, SimpleDateFormat "yyMMdd'T'HHmmss'Z'")
 function coupangDatetime(): string {
   const now = new Date();
   const yy = String(now.getUTCFullYear()).slice(2);
@@ -30,7 +30,7 @@ function coupangDatetime(): string {
   const HH = String(now.getUTCHours()).padStart(2, '0');
   const mm = String(now.getUTCMinutes()).padStart(2, '0');
   const ss = String(now.getUTCSeconds()).padStart(2, '0');
-  return `${yy}${MM}${dd}${HH}${mm}${ss}`;
+  return `${yy}${MM}${dd}T${HH}${mm}${ss}Z`;
 }
 
 function fallbackUrl(productName: string): string {
@@ -40,12 +40,13 @@ function fallbackUrl(productName: string): string {
 }
 
 async function fetchDeepLink(productName: string): Promise<string> {
-  // API 키 없으면 lptag 검색 URL로 폴백 (개발/테스트 환경 대비)
   if (!ACCESS_KEY || !SECRET_KEY) return fallbackUrl(productName);
 
   const searchUrl = `https://www.coupang.com/np/search?q=${encodeURIComponent(productName)}&channel=user`;
   const datetime = coupangDatetime();
-  const message = `POST\n${DEEP_LINK_PATH}\n${datetime}`;
+
+  // 공식 가이드: message = datetime + method + path + query (개행 없음)
+  const message = `${datetime}POST${DEEP_LINK_PATH}`;
   const signature = await hmacSha256Hex(message, SECRET_KEY);
   const authorization = `CEA algorithm=HmacSHA256, access-key=${ACCESS_KEY}, signed-date=${datetime}, signature=${signature}`;
 
@@ -67,7 +68,8 @@ async function fetchDeepLink(productName: string): Promise<string> {
     if (!res.ok) return fallbackUrl(productName);
 
     const json = await res.json();
-    if (json.rCode === '00' && json.data?.[0]?.shortenUrl) {
+    // 공식 가이드 기준 rCode는 "0" (문자열)
+    if (json.rCode === '0' && json.data?.[0]?.shortenUrl) {
       return json.data[0].shortenUrl;
     }
     return fallbackUrl(productName);
