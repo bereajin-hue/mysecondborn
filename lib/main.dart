@@ -11,37 +11,34 @@ import 'core/config/env.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 1) 환경변수 로드 — 이후 모든 SDK가 Env.*를 참조하므로 반드시 먼저 실행
+  // 1) 환경변수 로드
   await dotenv.load(fileName: '.env');
 
-  // 2) Sentry 초기화 — runApp을 감싸서 Flutter 프레임워크 에러까지 수집
-  await SentryFlutter.init(
-    (options) {
-      options.dsn = Env.sentryDsn;
-      options.tracesSampleRate = 0.2;
-    },
-    appRunner: () async {
-      // 3) Supabase 초기화
-      await Supabase.initialize(
-        url: Env.supabaseUrl,
-        anonKey: Env.supabaseAnonKey,
-      );
+  // 2) Sentry 초기화 — appRunner 없이 사용해야 Zone mismatch 방지
+  await SentryFlutter.init((options) {
+    options.dsn = Env.sentryDsn;
+    options.tracesSampleRate = 0.2;
+  });
 
-      // 4) 카카오 SDK 초기화 — 인증 기능이 앱 전반에서 사용되므로 여기서 등록
-      KakaoSdk.init(nativeAppKey: Env.kakaoNativeKey);
-
-      // 5) PostHog 초기화 — API 키 없으면 조용히 스킵 (개발 환경 대비)
-      final postHogKey = Env.postHogApiKey;
-      if (postHogKey.isNotEmpty) {
-        await Posthog().setup(
-          postHogKey,
-          options: PostHogConfig('https://app.posthog.com')
-            ..captureApplicationLifecycleEvents = false
-            ..debug = false,
-        );
-      }
-
-      runApp(const ProviderScope(child: MomPillApp()));
-    },
+  // 3) Supabase 초기화
+  await Supabase.initialize(
+    url: Env.supabaseUrl,
+    anonKey: Env.supabaseAnonKey,
   );
+
+  // 4) 카카오 SDK 초기화
+  KakaoSdk.init(nativeAppKey: Env.kakaoNativeKey);
+
+  // 5) PostHog 초기화 — API 키 없으면 조용히 스킵
+  final postHogKey = Env.postHogApiKey;
+  if (postHogKey.isNotEmpty) {
+    await Posthog().setup(
+      postHogKey,
+      options: PostHogConfig('https://app.posthog.com')
+        ..captureApplicationLifecycleEvents = false
+        ..debug = false,
+    );
+  }
+
+  runApp(const ProviderScope(child: MomPillApp()));
 }
