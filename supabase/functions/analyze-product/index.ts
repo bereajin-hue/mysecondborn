@@ -35,8 +35,27 @@ Deno.serve(async (req) => {
     if (scanErr || !scan) throw new Error('스캔 기록을 찾을 수 없어요')
     if (!scan.raw_image_url) throw new Error('이미지 URL이 없습니다')
 
-    // ── 2. 프롬프트 로드 ─────────────────────────────────────────
-    const prompt = await Deno.readTextFile('./prompt.md')
+    // ── 2. 프롬프트 로드 (CLI 배포 시 파일, 대시보드 배포 시 인라인 상수 사용) ──
+    let prompt: string
+    try {
+      prompt = await Deno.readTextFile('./prompt.md')
+    } catch {
+      prompt = `## 역할
+당신은 한국 건강기능식품 성분 분석 전문가입니다.
+사용자가 제공한 영양제 제품 이미지를 분석해 구매 결정에 필요한 정보를 JSON으로 반환합니다.
+
+## 절대 규칙
+1. JSON만 출력: 설명, 인사말, 마크다운 코드블록 일체 금지. 순수 JSON 텍스트만.
+2. 의료 표현 금지: "치료", "예방", "치유", "완치", "처방", "의약품" 사용 금지.
+3. 추측 금지: 이미지에서 읽을 수 없는 정보는 반드시 null 처리.
+4. 한국어 응답: 모든 텍스트 필드는 한국어로 작성.
+5. 영양제가 아닌 이미지: {"error":"영양제 제품이 아닙니다"} 만 반환.
+
+## 출력 형식 (영양제인 경우)
+{"product_name":"제품 정확 명칭","brand":"브랜드명 또는 null","main_ingredients":[{"name":"성분명","amount":"함량(단위포함)","daily_percent":"일일권장량% 또는 null"}],"category":"비타민|미네랄|프로바이오틱스|오메가3|기타","key_benefits":["기능성1","기능성2"],"warnings":["주의사항"],"target_age":"추천연령대 또는 null","confidence":0.0~1.0,"readable_summary":"70대 어르신도 이해할 3줄 이내 설명"}
+
+confidence 기준: 0.9~1.0=모든정보확인, 0.7~0.8=일부흐릿, 0.5~0.6=제품명만확인, 0.5미만=product_name에 "(정확도 낮음)" 추가`
+    }
 
     // ── 3. 이미지 다운로드 → Base64 변환 ─────────────────────────
     const imgRes = await fetch(scan.raw_image_url)
