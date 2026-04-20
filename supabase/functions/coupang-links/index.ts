@@ -40,6 +40,7 @@ function fallbackUrl(productName: string): string {
 }
 
 async function fetchDeepLink(productName: string): Promise<string> {
+  console.log('[coupang-links] ACCESS_KEY set:', !!ACCESS_KEY, 'SECRET_KEY set:', !!SECRET_KEY);
   if (!ACCESS_KEY || !SECRET_KEY) return fallbackUrl(productName);
 
   const searchUrl = `https://www.coupang.com/np/search?q=${encodeURIComponent(productName)}&channel=user`;
@@ -65,16 +66,20 @@ async function fetchDeepLink(productName: string): Promise<string> {
     });
     clearTimeout(timeoutId);
 
+    const responseText = await res.text();
+    console.log('[coupang-links] status:', res.status, 'body:', responseText);
+
     if (!res.ok) return fallbackUrl(productName);
 
-    const json = await res.json();
+    const json = JSON.parse(responseText);
     // 공식 가이드 기준 rCode는 "0" (문자열)
     if (json.rCode === '0' && json.data?.[0]?.shortenUrl) {
       return json.data[0].shortenUrl;
     }
     return fallbackUrl(productName);
-  } catch {
+  } catch (err) {
     clearTimeout(timeoutId);
+    console.error('[coupang-links] fetch error:', err);
     return fallbackUrl(productName);
   }
 }
