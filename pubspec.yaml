@@ -39,6 +39,9 @@ dependencies:
   # 외부 링크 (쿠팡 파트너스)
   url_launcher: ^6.3.0
 
+  # 네트워크 상태 감지 (오프라인 배너)
+  connectivity_plus: ^6.0.0
+
   # 사용자 행동 분석
   posthog_flutter: ^4.0.0
 
