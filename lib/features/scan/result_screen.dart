@@ -429,9 +429,9 @@ class ResultScreen extends ConsumerWidget {
                   width: double.infinity,
                   height: 56,
                   child: OutlinedButton.icon(
-                    onPressed: productId != null
-                        ? () => _saveToMyCabinet(context, ref, userId, productId)
-                        : null,
+                    onPressed: () => _saveToMyCabinet(
+                      context, ref, userId, productId, productName,
+                    ),
                     style: OutlinedButton.styleFrom(
                       side: const BorderSide(
                           color: AppTheme.primaryColor, width: 2),
@@ -505,8 +505,20 @@ class ResultScreen extends ConsumerWidget {
     BuildContext context,
     WidgetRef ref,
     String userId,
-    String productId,
+    String? productId,
+    String productName,
   ) async {
+    // product_id가 아직 없으면 분석이 완전히 완료되지 않은 상태
+    if (productId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('제품 정보를 불러오는 중이에요. 잠시 후 다시 눌러주세요.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
     try {
       await ref.read(scanRepositoryProvider).saveToMyCabinet(userId, productId);
       // 저장 완료 시 캐비닛 캐시 갱신
