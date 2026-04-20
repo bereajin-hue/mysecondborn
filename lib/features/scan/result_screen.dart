@@ -118,6 +118,8 @@ class ResultScreen extends ConsumerWidget {
     final ingredients = (gemini['main_ingredients'] as List<dynamic>?) ?? [];
     final keyBenefits = (gemini['key_benefits'] as List<dynamic>?) ?? [];
     final warnings = (gemini['warnings'] as List<dynamic>?) ?? [];
+    final goodWith = (gemini['good_with'] as List<dynamic>?) ?? [];
+    final avoidWith = (gemini['avoid_with'] as List<dynamic>?) ?? [];
 
     return SingleChildScrollView(
       child: Column(
@@ -287,6 +289,76 @@ class ResultScreen extends ConsumerWidget {
                           ],
                         ),
                       )),
+                ],
+
+                // ── 함께 먹으면 도움이 될 수 있어요 (초록 박스) ──
+                if (goodWith.isNotEmpty) ...[
+                  const SizedBox(height: 24),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEFF9F2),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFB2DFDB)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('💚 함께 먹으면 도움이 될 수 있어요',
+                            style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF1B6B3A))),
+                        const SizedBox(height: 8),
+                        ...goodWith.map((e) => Padding(
+                              padding: const EdgeInsets.only(bottom: 6),
+                              child: Text('• $e',
+                                  style: const TextStyle(
+                                      fontSize: 16,
+                                      color: Color(0xFF2D5A3D),
+                                      height: 1.5)),
+                            )),
+                      ],
+                    ),
+                  ),
+                ],
+
+                // ── 함께 드실 때 주의가 필요해요 (노란 박스) ────────
+                if (avoidWith.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFFBEA),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFFFE082)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('⚠️ 함께 드실 때 주의가 필요해요',
+                            style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF7B5800))),
+                        const SizedBox(height: 4),
+                        const Text('궁금하신 점은 약사나 전문가와 상담하세요.',
+                            style: TextStyle(
+                                fontSize: 13, color: Color(0xFF9E7B00))),
+                        const SizedBox(height: 10),
+                        ...avoidWith.map((e) => Padding(
+                              padding: const EdgeInsets.only(bottom: 6),
+                              child: Text('• $e',
+                                  style: const TextStyle(
+                                      fontSize: 16,
+                                      color: Color(0xFF5D4200),
+                                      height: 1.5)),
+                            )),
+                      ],
+                    ),
+                  ),
                 ],
 
                 // ── 주의사항 (빨간 박스) ─────────────────────────
