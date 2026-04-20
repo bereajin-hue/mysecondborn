@@ -509,14 +509,19 @@ class ResultScreen extends ConsumerWidget {
   ) async {
     try {
       await ref.read(scanRepositoryProvider).saveToMyCabinet(userId, productId);
+      // 저장 완료 시 캐비닛 캐시 갱신
+      ref.invalidate(cabinetProvider(userId));
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('내 영양제에 저장했어요! 💊'),
             backgroundColor: Color(0xFF22AA44),
             behavior: SnackBarBehavior.floating,
+            duration: Duration(seconds: 2),
           ),
         );
+        await Future.delayed(const Duration(milliseconds: 600));
+        if (context.mounted) context.go('/cabinet');
       }
     } catch (e) {
       if (context.mounted) {

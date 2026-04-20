@@ -194,4 +194,51 @@ class ScanRepository {
       'product_id': productId,
     });
   }
+
+  // 캐비닛 목록 조회 — cabinet + scans 2쿼리로 N+1 없이 조합
+  Future<List<Map<String, dynamic>>> getCabinetItems(String userId) async {
+    final cabinetRows = await _supabase
+        .from('cabinet')
+        .select('id, product_id, created_at')
+        .eq('user_id', userId)
+        .order('created_at', ascending: false);
+
+    if ((cabinetRows as List).isEmpty) return [];
+
+    final productIds = cabinetRows.map((r) => r['product_id'] as String).toList();
+
+    final scanRows = await _supabase
+        .from('scans')
+        .select('id, product_id, raw_image_url, gemini_response')
+        .eq('user_id', userId)
+        .inFilter('product_id', productIds)
+        .order('created_at', ascending: false);
+
+    // product_id → 가장 최신 scan (이미 내림차순이므로 첫 번째가 최신)
+    final Map<String, Map<String, dynamic>> scanByProduct = {};
+    for (final scan in (scanRows as List)) {
+      final pid = scan['product_id'] as String?;
+      if (pid != null && !scanByProduct.containsKey(pid)) {
+        scanByProduct[pid] = Map<String, dynamic>.from(scan as Map);
+      }
+    }
+
+    return cabinetRows.map<Map<String, dynamic>>((cabinet) {
+      final productId = cabinet['product_id'] as String;
+      final scan = scanByProduct[productId];
+      final gemini = scan?['gemini_response'] as Map<String, dynamic>?;
+      return {
+        'cabinet_id': cabinet['id'] as String,
+        'product_id': productId,
+        'added_at': cabinet['created_at'] as String,
+        'scan_id': scan?['id'] as String?,
+        'image_url': scan?['raw_image_url'] as String?,
+        'product_name': gemini?['product_name'] as String? ?? '알 수 없는 제품',
+      };
+    }).toList();
+  }
+
+  Future<void> deleteFromCabinet(String cabinetId) async {
+    await _supabase.from('cabinet').delete().eq('id', cabinetId);
+  }
 }

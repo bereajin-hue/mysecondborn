@@ -40,6 +40,11 @@ final scanNotifierProvider = StateNotifierProvider<ScanNotifier, ScanState>(
   (ref) => ScanNotifier(ref.read(scanRepositoryProvider)),
 );
 
+// CabinetScreen 전용 — 저장/삭제 후 ref.invalidate(cabinetProvider(userId))로 갱신
+final cabinetProvider = FutureProvider.autoDispose.family<List<Map<String, dynamic>>, String>(
+  (ref, userId) => ref.read(scanRepositoryProvider).getCabinetItems(userId),
+);
+
 // ResultScreen 전용 — scans 테이블을 실시간 구독하여 gemini_response 업데이트 감지
 final scanStreamProvider = StreamProvider.autoDispose.family<Map<String, dynamic>?, String>(
   (ref, scanId) {
