@@ -1,19 +1,26 @@
 import 'package:flutter/foundation.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide AuthException;
+import 'package:url_launcher/url_launcher.dart';
+import '../../core/config/env.dart';
 
 class AuthRepository {
   final _supabase = Supabase.instance.client;
 
-  // 웹 MVP: kakao_flutter_sdk는 웹 미지원 → Supabase 내장 Kakao OAuth 사용
-  // redirectTo 없으면 OAuth 콜백 후 앱으로 돌아오지 못함
+  // gotrue 패키지가 웹에서 Kakao JS SDK를 직접 호출하는 문제 우회
+  // url_launcher로 Supabase auth URL을 직접 열어 서버사이드 OAuth 강제
   Future<void> signInWithKakao() async {
     try {
-      final redirectTo = kIsWeb ? Uri.base.origin : null;
-      await _supabase.auth.signInWithOAuth(
-        OAuthProvider.kakao,
-        redirectTo: redirectTo,
-      );
+      if (kIsWeb) {
+        final redirectTo = Uri.base.origin;
+        final authUri = Uri.parse(Env.supabaseUrl).replace(
+          path: '/auth/v1/authorize',
+          queryParameters: {'provider': 'kakao', 'redirect_to': redirectTo},
+        );
+        await launchUrl(authUri, mode: LaunchMode.platformDefault);
+      } else {
+        await _supabase.auth.signInWithOAuth(OAuthProvider.kakao);
+      }
     } catch (e, s) {
       try {
         await Sentry.captureException(e, stackTrace: s);
