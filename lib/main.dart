@@ -50,12 +50,11 @@ void main() {
       anonKey: Env.supabaseAnonKey,
     );
 
-    // 7) 카카오 SDK 초기화 — 웹은 JavaScript Key, 모바일은 Native Key
-    if (kIsWeb) {
-      KakaoSdk.init(javaScriptAppKey: Env.kakaoJsKey);
-    } else {
-      KakaoSdk.init(nativeAppKey: Env.kakaoNativeKey);
-    }
+    // 7) 카카오 SDK 초기화 — 두 키를 동시에 넘겨야 SDK 내부에서 플랫폼별로 올바르게 선택됨
+    KakaoSdk.init(
+      nativeAppKey: Env.kakaoNativeKey,
+      javaScriptAppKey: Env.kakaoJsKey,
+    );
 
     // 8) SharedPreferences 초기화 — 글씨 크기·코치마크 설정 영속화
     final prefs = await SharedPreferences.getInstance();
