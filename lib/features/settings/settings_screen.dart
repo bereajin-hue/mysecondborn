@@ -1,7 +1,80 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../core/config/prefs_provider.dart';
 import '../../shared/theme/app_theme.dart';
+
+// 글씨 크기 선택 위젯 — Consumer 분리로 불필요한 상위 리빌드 방지
+class _FontSizeSelector extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final current = ref.watch(fontSizeProvider);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.text_fields_rounded,
+                  color: AppTheme.primaryColor, size: 24),
+              SizedBox(width: 12),
+              Text(
+                '글씨 크기',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: FontSizeLevel.values.map((level) {
+              final isSelected = current == level;
+              return Expanded(
+                child: GestureDetector(
+                  onTap: () {
+                    HapticFeedback.mediumImpact();
+                    ref.read(fontSizeProvider.notifier).set(level);
+                  },
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 150),
+                    margin: const EdgeInsets.symmetric(horizontal: 3),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? AppTheme.primaryColor
+                          : const Color(0xFFF0F0F0),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      level.label,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: isSelected
+                            ? FontWeight.bold
+                            : FontWeight.normal,
+                        color: isSelected
+                            ? Colors.white
+                            : const Color(0xFF555555),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '현재: ${current.label}',
+            style: const TextStyle(fontSize: 13, color: Color(0xFF999999)),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -15,14 +88,8 @@ class SettingsScreen extends ConsumerWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         child: Column(
           children: [
-            // 글씨 크기 — 시니어가 더 크게 조절할 수 있도록 (Day 4 구현)
-            ListTile(
-              leading: const Icon(Icons.text_fields_rounded, color: AppTheme.primaryColor),
-              title: const Text('글씨 크기'),
-              subtitle: const Text('기본'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () {}, // TODO Day 4
-            ),
+            // 글씨 크기 — 4단계 선택, 변경 즉시 앱 전체에 반영
+            _FontSizeSelector(),
             const Divider(),
             // 앱 버전 — 고객센터 문의 시 필요
             const ListTile(

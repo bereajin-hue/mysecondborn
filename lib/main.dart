@@ -6,9 +6,11 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'app.dart';
 import 'core/config/env.dart';
+import 'core/config/prefs_provider.dart';
 import 'shared/widgets/error_boundary.dart';
 
 void main() {
@@ -50,7 +52,13 @@ void main() {
     // 7) 카카오 SDK 초기화
     KakaoSdk.init(nativeAppKey: Env.kakaoNativeKey);
 
-    runApp(const ProviderScope(child: MomPillApp()));
+    // 8) SharedPreferences 초기화 — 글씨 크기·코치마크 설정 영속화
+    final prefs = await SharedPreferences.getInstance();
+
+    runApp(ProviderScope(
+      overrides: [sharedPrefsProvider.overrideWithValue(prefs)],
+      child: const MomPillApp(),
+    ));
   }, (error, stack) {
     // Zone 내 잡히지 않은 비동기 에러 — Sentry 초기화 이후에만 전송 가능
     try {

@@ -1,4 +1,6 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -157,16 +159,30 @@ class _CabinetCard extends ConsumerWidget {
         ),
         child: Row(
           children: [
-            // 제품 이미지
+            // 제품 이미지 — CachedNetworkImage로 로딩 placeholder 제공
             ClipRRect(
               borderRadius: BorderRadius.circular(10),
               child: imageUrl != null
-                  ? Image.network(
-                      imageUrl,
+                  ? CachedNetworkImage(
+                      imageUrl: imageUrl,
                       width: 72,
                       height: 72,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => _imagePlaceholder(),
+                      placeholder: (_, __) => Container(
+                        width: 72,
+                        height: 72,
+                        color: const Color(0xFFF4F4F4),
+                        child: const Center(
+                          child: SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: AppTheme.primaryColor),
+                          ),
+                        ),
+                      ),
+                      errorWidget: (_, __, ___) => _imagePlaceholder(),
                     )
                   : _imagePlaceholder(),
             ),
@@ -202,8 +218,10 @@ class _CabinetCard extends ConsumerWidget {
               icon: const Icon(Icons.delete_outline_rounded,
                   color: Color(0xFFCCCCCC), size: 28),
               tooltip: '삭제',
-              onPressed: () =>
-                  _confirmDelete(context, ref, cabinetId, productName),
+              onPressed: () {
+                HapticFeedback.mediumImpact();
+                _confirmDelete(context, ref, cabinetId, productName);
+              },
             ),
           ],
         ),

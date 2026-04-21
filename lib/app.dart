@@ -9,6 +9,7 @@ import 'features/cabinet/cabinet_screen.dart';
 import 'features/scan/home_screen.dart';
 import 'features/scan/result_screen.dart';
 import 'features/settings/settings_screen.dart';
+import 'core/config/prefs_provider.dart';
 import 'shared/theme/app_theme.dart';
 import 'shared/widgets/error_boundary.dart';
 
@@ -105,12 +106,19 @@ class _MomPillAppState extends ConsumerState<MomPillApp> {
 
   @override
   Widget build(BuildContext context) {
+    final fontScale = ref.watch(fontSizeProvider.select((l) => l.scale));
+
     return MaterialApp.router(
       title: 'MomPill',
       theme: AppTheme.light,
       routerConfig: _router,
-      // 전환 애니메이션 최소화 — 시니어는 갑작스러운 화면 전환에 혼란을 느낄 수 있음
-      builder: (context, child) => child!,
+      // 글씨 크기 설정값을 앱 전체에 반영 — 시니어 설정에서 선택한 배율 적용
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context).copyWith(
+          textScaler: TextScaler.linear(fontScale),
+        ),
+        child: child!,
+      ),
     );
   }
 }

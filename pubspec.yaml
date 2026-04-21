@@ -42,6 +42,9 @@ dependencies:
   # 네트워크 상태 감지 (오프라인 배너)
   connectivity_plus: ^6.0.0
 
+  # 글씨 크기·코치마크 설정 영속화
+  shared_preferences: ^2.3.0
+
   # 사용자 행동 분석
   posthog_flutter: ^4.0.0
 
