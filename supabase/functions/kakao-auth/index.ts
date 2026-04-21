@@ -9,7 +9,6 @@ const CORS = {
 }
 
 Deno.serve(async (req) => {
-  // CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: CORS })
   }
@@ -27,9 +26,9 @@ Deno.serve(async (req) => {
     }
 
     const kakaoUser = await kakaoRes.json()
-    const kakaoId    = String(kakaoUser.id)
-    const nickname   = kakaoUser.kakao_account?.profile?.nickname   ?? '고객'
-    const avatarUrl  = kakaoUser.kakao_account?.profile?.profile_image_url ?? null
+    const kakaoId   = String(kakaoUser.id)
+    const nickname  = kakaoUser.kakao_account?.profile?.nickname ?? '고객'
+    const avatarUrl = kakaoUser.kakao_account?.profile?.profile_image_url ?? null
 
     // ── 2. Supabase Admin 클라이언트 (service key 필요) ───────────────
     const supabase = createClient(
@@ -37,41 +36,56 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     )
 
-    // kakao ID 기반 고정 이메일 — 카카오는 이메일 비공개 허용이라 직접 사용 불가
-    const email = `kakao_${kakaoId}@mompill.app`
-
-    // ── 3. 유저 생성 또는 메타데이터 갱신 ────────────────────────────
+    const email    = `kakao_${kakaoId}@mompill.app`
     const metadata = { kakao_id: kakaoId, nickname, avatar_url: avatarUrl }
-    const { data: created, error: createErr } = await supabase.auth.admin.createUser({
-      email,
-      email_confirm: true,
-      user_metadata: metadata,
-    })
 
-    let userId: string
-    if (createErr) {
-      // 이미 가입된 유저 — 이메일로 찾아서 메타데이터만 갱신
-      if (!createErr.message.includes('already been registered')) throw createErr
+    // ── 3. profiles.kakao_id로 기존 유저 조회 (listUsers 대신 O(1)) ──
+    // listUsers(perPage:1000) 방식은 유저 증가 시 누락 위험이 있어 교체
+    let userId: string | null = null
 
-      const { data: { users } } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 })
-      const existing = users.find((u) => u.email === email)
-      if (!existing) throw new Error('유저를 찾을 수 없습니다')
+    const { data: existingProfile } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('kakao_id', kakaoId)
+      .maybeSingle()
 
-      userId = existing.id
+    if (existingProfile) {
+      userId = existingProfile.id as string
       await supabase.auth.admin.updateUserById(userId, { user_metadata: metadata })
     } else {
-      userId = created.user!.id
+      // 신규 유저 생성
+      const { data: created, error: createErr } = await supabase.auth.admin.createUser({
+        email,
+        email_confirm: true,
+        user_metadata: metadata,
+      })
+
+      if (createErr) {
+        // 드물게 profiles 없이 auth.users만 있는 경우 — email로 재탐색
+        if (!createErr.message.includes('already been registered')) throw createErr
+
+        const { data: { users } } = await supabase.auth.admin.listUsers({
+          page: 1,
+          perPage: 50,
+        })
+        const existing = users.find((u) => u.email === email)
+        if (!existing) throw new Error('유저 정보를 확인할 수 없어요. 다시 시도해주세요.')
+        userId = existing.id
+        await supabase.auth.admin.updateUserById(userId, { user_metadata: metadata })
+      } else {
+        userId = created.user!.id
+      }
     }
 
-    // ── 4. profiles 테이블 upsert (트리거가 없을 때 대비) ─────────────
+    // ── 4. profiles upsert — kakao_id 포함 저장 ─────────────────────
     await supabase.from('profiles').upsert({
       id: userId,
+      kakao_id: kakaoId,
       kakao_nickname: nickname,
       avatar_url: avatarUrl,
     })
 
     // ── 5. Magic link 생성 → OTP 토큰 추출 → 앱에 반환 ──────────────
-    // generateLink 방식: 이메일 발송 없이 토큰만 추출해 앱이 직접 세션 수립
     const { data: linkData, error: linkErr } = await supabase.auth.admin.generateLink({
       type: 'magiclink',
       email,
@@ -80,7 +94,7 @@ Deno.serve(async (req) => {
 
     const url   = new URL(linkData.properties.action_link)
     const token = url.searchParams.get('token')
-    if (!token) throw new Error('토큰 생성에 실패했어요')
+    if (!token) throw new Error('토큰 생성에 실패했어요. 다시 시도해주세요.')
 
     return new Response(
       JSON.stringify({ email, token }),
