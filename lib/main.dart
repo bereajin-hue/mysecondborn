@@ -1,11 +1,9 @@
 import 'dart:async';
 import 'dart:ui';
 
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -50,13 +48,7 @@ void main() {
       anonKey: Env.supabaseAnonKey,
     );
 
-    // 7) 카카오 SDK 초기화 — 두 키를 동시에 넘겨야 SDK 내부에서 플랫폼별로 올바르게 선택됨
-    KakaoSdk.init(
-      nativeAppKey: Env.kakaoNativeKey,
-      javaScriptAppKey: Env.kakaoJsKey,
-    );
-
-    // 8) SharedPreferences 초기화 — 글씨 크기·코치마크 설정 영속화
+    // 7) SharedPreferences 초기화 — 글씨 크기·코치마크 설정 영속화
     final prefs = await SharedPreferences.getInstance();
 
     runApp(ProviderScope(
