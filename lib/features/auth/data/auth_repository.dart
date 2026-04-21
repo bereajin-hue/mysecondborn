@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart' show OAuthToken, UserApi, isKakaoTalkInstalled;
 import 'package:sentry_flutter/sentry_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide AuthException;
@@ -11,9 +12,10 @@ class AuthRepository {
 
     for (int attempt = 0; attempt <= 2; attempt++) {
       try {
-        // 1) 카카오톡 앱 → 없으면 카카오 계정 웹 로그인 (웹 빌드 포함 대응)
+        // 1) 카카오톡 앱 → 없으면 카카오 계정 웹 로그인
+        // 웹에서는 isKakaoTalkInstalled()가 항상 false — 분기 없이 바로 계정 로그인
         OAuthToken kakaoToken;
-        if (await isKakaoTalkInstalled()) {
+        if (!kIsWeb && await isKakaoTalkInstalled()) {
           kakaoToken = await UserApi.instance.loginWithKakaoTalk();
         } else {
           kakaoToken = await UserApi.instance.loginWithKakaoAccount();

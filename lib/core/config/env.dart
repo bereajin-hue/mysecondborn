@@ -7,6 +7,7 @@ class Env {
   static String get geminiApiKey => _require('GEMINI_API_KEY');
   static String get sentryDsn => _require('SENTRY_DSN');
   static String get kakaoNativeKey => _require('KAKAO_NATIVE_KEY');
+  static String get kakaoJsKey => _require('KAKAO_JS_KEY');
   static String get coupangTrackingId => _require('COUPANG_TRACKING_ID');
   static String get postHogApiKey => dotenv.env['POSTHOG_API_KEY'] ?? '';
 

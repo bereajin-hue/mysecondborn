@@ -1,4 +1,5 @@
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -15,6 +16,12 @@ import 'shared/widgets/error_boundary.dart';
 
 // 오프라인 여부를 bool로 emit — true면 오프라인
 final connectivityProvider = StreamProvider<bool>((ref) async* {
+  // 웹은 브라우저가 네트워크 상태를 처리하므로 항상 온라인으로 간주
+  if (kIsWeb) {
+    yield false;
+    return;
+  }
+
   bool _offline(List<ConnectivityResult> r) =>
       r.isEmpty || r.every((e) => e == ConnectivityResult.none);
 

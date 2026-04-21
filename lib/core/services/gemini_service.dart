@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:google_generative_ai/google_generative_ai.dart';
@@ -35,15 +34,6 @@ class GeminiService {
       throw const GeminiException('이미지가 너무 큽니다. 앱에서 압축 후 다시 시도해주세요.');
     }
     return _analyze(DataPart(mimeType, bytes));
-  }
-
-  /// CLI 도구 전용 — dart:io File 기반 (모바일/CLI 환경)
-  Future<Map<String, dynamic>> analyzeProduct(File imageFile) async {
-    final imageBytes = await imageFile.readAsBytes();
-    if (imageBytes.lengthInBytes > AppConfig.maxImageBytes) {
-      throw const GeminiException('이미지가 너무 큽니다. 앱에서 압축 후 다시 시도해주세요.');
-    }
-    return _analyze(DataPart(_detectMimeType(imageFile.path), imageBytes));
   }
 
   Future<Map<String, dynamic>> _analyze(DataPart dataPart) async {
@@ -119,13 +109,6 @@ class GeminiService {
     return result;
   }
 
-  String _detectMimeType(String path) {
-    final lower = path.toLowerCase();
-    if (lower.endsWith('.png')) return 'image/png';
-    if (lower.endsWith('.webp')) return 'image/webp';
-    if (lower.endsWith('.heic')) return 'image/heic';
-    return 'image/jpeg';
-  }
 }
 
 class GeminiException implements Exception {

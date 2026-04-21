@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -105,7 +106,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   onTap: scanState.isProcessing
                       ? null
                       : () {
-                          HapticFeedback.mediumImpact();
+                          if (!kIsWeb) HapticFeedback.mediumImpact();
                           _onCameraPressed(context, user?.id ?? '');
                         },
                   child: AnimatedOpacity(
@@ -228,7 +229,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   void _showPhotoTipsDialog(BuildContext context) {
-    HapticFeedback.lightImpact();
+    if (!kIsWeb) HapticFeedback.lightImpact();
     showDialog<void>(
       context: context,
       builder: (_) => AlertDialog(
@@ -268,7 +269,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             width: double.infinity,
             child: ElevatedButton(
               onPressed: () {
-                HapticFeedback.mediumImpact();
+                if (!kIsWeb) HapticFeedback.mediumImpact();
                 Navigator.pop(context);
               },
               child: const Text('알겠어요!'),
@@ -334,7 +335,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               title: const Text('카메라로 촬영',
                   style: TextStyle(fontSize: 18)),
               onTap: () {
-                HapticFeedback.mediumImpact();
+                if (!kIsWeb) HapticFeedback.mediumImpact();
                 Navigator.pop(context, ImageSource.camera);
               },
             ),
@@ -344,7 +345,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               title: const Text('앨범에서 선택',
                   style: TextStyle(fontSize: 18)),
               onTap: () {
-                HapticFeedback.mediumImpact();
+                if (!kIsWeb) HapticFeedback.mediumImpact();
                 Navigator.pop(context, ImageSource.gallery);
               },
             ),

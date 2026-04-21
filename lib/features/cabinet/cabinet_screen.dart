@@ -1,4 +1,5 @@
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -219,7 +220,7 @@ class _CabinetCard extends ConsumerWidget {
                   color: Color(0xFFCCCCCC), size: 28),
               tooltip: '삭제',
               onPressed: () {
-                HapticFeedback.mediumImpact();
+                if (!kIsWeb) HapticFeedback.mediumImpact();
                 _confirmDelete(context, ref, cabinetId, productName);
               },
             ),
