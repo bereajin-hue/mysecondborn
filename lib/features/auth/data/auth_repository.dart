@@ -1,31 +1,62 @@
-import 'package:flutter/foundation.dart';
+import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart' show OAuthToken, UserApi, isKakaoTalkInstalled;
 import 'package:sentry_flutter/sentry_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide AuthException;
-import 'package:url_launcher/url_launcher.dart';
 
 class AuthRepository {
   final _supabase = Supabase.instance.client;
 
-  // gotrue 패키지가 웹에서 Kakao JS SDK를 직접 호출하는 문제 우회
-  // url_launcher로 Supabase auth URL을 직접 열어 서버사이드 OAuth 강제
+  // 규칙 3번: 외부 API 호출 — try-catch + exponential backoff 3회 (1s→3s→9s)
   Future<void> signInWithKakao() async {
-    try {
-      if (kIsWeb) {
-        final redirectTo = Uri.base.origin;
-        final authUri = Uri.parse(_supabase.supabaseUrl).replace(
-          path: '/auth/v1/authorize',
-          queryParameters: {'provider': 'kakao', 'redirect_to': redirectTo},
-        );
-        await launchUrl(authUri, mode: LaunchMode.externalApplication);
-      } else {
-        await _supabase.auth.signInWithOAuth(OAuthProvider.kakao);
-      }
-    } catch (e, s) {
+    Object? lastError;
+
+    for (int attempt = 0; attempt <= 2; attempt++) {
       try {
-        await Sentry.captureException(e, stackTrace: s);
-      } catch (_) {}
-      throw AuthException('잠깐 문제가 생겼어요. 다시 시도해주세요.', cause: e);
+        // 1) 카카오톡 앱 → 없으면 카카오 계정 웹 로그인 (웹 빌드 포함 대응)
+        OAuthToken kakaoToken;
+        if (await isKakaoTalkInstalled()) {
+          kakaoToken = await UserApi.instance.loginWithKakaoTalk();
+        } else {
+          kakaoToken = await UserApi.instance.loginWithKakaoAccount();
+        }
+
+        // 2) Edge Function 호출 (카카오 토큰 검증 + Supabase 유저 생성/조회)
+        final res = await _supabase.functions
+            .invoke(
+              'kakao-auth',
+              body: {'access_token': kakaoToken.accessToken},
+            )
+            .timeout(const Duration(seconds: 10));
+
+        if (res.data is Map && res.data['error'] != null) {
+          throw Exception(res.data['error'] as String);
+        }
+
+        final tokenHash = res.data['token'] as String;
+
+        // 3) 해시 토큰으로 Supabase 세션 수립 — tokenHash 사용 시 email 전달 금지
+        await _supabase.auth.verifyOTP(
+          tokenHash: tokenHash,
+          type: OtpType.magiclink,
+        );
+
+        return;
+      } catch (e, s) {
+        lastError = e;
+        try {
+          await Sentry.captureException(
+            e,
+            stackTrace: s,
+            hint: Hint.withMap({'attempt': attempt.toString()}),
+          );
+        } catch (_) {}
+
+        if (attempt < 2) {
+          await Future.delayed(Duration(seconds: attempt == 0 ? 1 : 3));
+        }
+      }
     }
+
+    throw AuthException(_toUserMessage(lastError), cause: lastError);
   }
 
   Future<void> signOut() async {
@@ -33,6 +64,15 @@ class AuthRepository {
   }
 
   User? get currentUser => _supabase.auth.currentUser;
+
+  String _toUserMessage(Object? error) {
+    final msg = error?.toString() ?? '';
+    if (msg.contains('network') || msg.contains('SocketException')) {
+      return '인터넷 연결을 확인하고 다시 시도해주세요.';
+    }
+    if (msg.contains('카카오')) return msg;
+    return '잠깐 문제가 생겼어요. 다시 시도해주세요.';
+  }
 }
 
 class AuthException implements Exception {
@@ -43,4 +83,3 @@ class AuthException implements Exception {
   @override
   String toString() => 'AuthException: $userMessage';
 }
-

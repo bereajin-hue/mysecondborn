@@ -85,15 +85,16 @@ Deno.serve(async (req) => {
       avatar_url: avatarUrl,
     })
 
-    // ── 5. Magic link 생성 → OTP 토큰 추출 → 앱에 반환 ──────────────
+    // ── 5. Magic link 생성 → hashed_token 추출 → 앱에 반환 ─────────
+    // URL 파싱 대신 properties.hashed_token 직접 사용
+    // 클라이언트는 verifyOTP(tokenHash:) 사용 — email 동시 전달 불가
     const { data: linkData, error: linkErr } = await supabase.auth.admin.generateLink({
       type: 'magiclink',
       email,
     })
     if (linkErr) throw linkErr
 
-    const url   = new URL(linkData.properties.action_link)
-    const token = url.searchParams.get('token')
+    const token = linkData.properties.hashed_token
     if (!token) throw new Error('토큰 생성에 실패했어요. 다시 시도해주세요.')
 
     return new Response(
